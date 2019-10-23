@@ -3,6 +3,8 @@ defmodule ExSMT do
   alias ExSMT.Variable
   alias ExSMT.Solver
 
+  def expr(op), do:
+    Expression.new(op, [])
   def expr(op, arg_a), do:
     Expression.new(op, [arg_a])
   def expr(op, arg_a, arg_b), do:
