@@ -1,4 +1,4 @@
-defmodule ExSMT.Formula do
+defmodule ExSMT.Expression do
   defstruct [op: nil, args: [], var_decls: MapSet.new()]
 
   def new(op, args), do:
@@ -23,8 +23,8 @@ defmodule ExSMT.Formula do
     vd
 end
 
-defimpl ExSMT.Serializable, for: ExSMT.Formula do
-  def serialize(%ExSMT.Formula{op: :conj, args: args, var_decls: var_decls}) do
+defimpl ExSMT.Serializable, for: ExSMT.Expression do
+  def serialize(%ExSMT.Expression{op: :conj, args: args, var_decls: var_decls}) do
     var_decls = Enum.map(var_decls, fn var ->
       ["(declare-const ", ExSMT.Serializable.serialize(var), " Int)\n"]
     end)
@@ -34,7 +34,7 @@ defimpl ExSMT.Serializable, for: ExSMT.Formula do
     [var_decls, assertions]
   end
 
-  def serialize(%ExSMT.Formula{op: op, args: args}) do
+  def serialize(%ExSMT.Expression{op: op, args: args}) do
     ser_args =
       Enum.map(args, &ExSMT.Serializable.serialize/1)
       |> Enum.intersperse(" ")
@@ -42,21 +42,21 @@ defimpl ExSMT.Serializable, for: ExSMT.Formula do
   end
 end
 
-defimpl Inspect, for: ExSMT.Formula do
+defimpl Inspect, for: ExSMT.Expression do
   import Inspect.Algebra
 
-  def inspect(%ExSMT.Formula{op: :true}, opts) do
+  def inspect(%ExSMT.Expression{op: :true}, opts) do
     color("⊤", :number, opts)
   end
 
-  def inspect(%ExSMT.Formula{op: :conj, args: args}, opts) do
+  def inspect(%ExSMT.Expression{op: :conj, args: args}, opts) do
     pre = color("(", :tuple, opts)
     post = color(")", :tuple, opts)
     sep = color(" ∧", :operator, opts)
     nest(container_doc(pre, args, post, opts, &to_doc/2, separator: sep, break: :flex), 2)
   end
 
-  def inspect(%ExSMT.Formula{op: op, args: args}, opts) do
+  def inspect(%ExSMT.Expression{op: op, args: args}, opts) do
     pre = color("(", :hidden, opts)
     post = color(")", :hidden, opts)
     sep = color("", :tuple, opts)

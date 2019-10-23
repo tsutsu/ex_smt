@@ -21,10 +21,10 @@ Docs can be found at [https://hexdocs.pm/ex_smt](https://hexdocs.pm/ex_smt).
 ```elixir
 iex> a = ExSMT.env_var(:a)
 iex> b = ExSMT.env_var(:b)
-iex> q = ExSMT.formula(:conj,
-...>   ExSMT.formula(:>, a, 5),
-...>   ExSMT.formula(:<, a, 10),
-...>   ExSMT.formula(:=, b, 7)
+iex> q = ExSMT.expr(:conj,
+...>   ExSMT.expr(:>, a, 5),
+...>   ExSMT.expr(:<, a, 10),
+...>   ExSMT.expr(:=, b, 7)
 ...> )
 ((< $A 10) ∧ (> $A 5) ∧ (= $B 7))
 
@@ -34,7 +34,8 @@ iex> ExSMT.solve(q)
 
 #### A Cute Trick
 
-Add the following to your `~/.iex.exs` for better readability of ExSMT formulae:
+For better IEx readability of ExSMT expressions, add the following to your
+`~/.iex.exs`:
 
 ```elixir
 new_colors =
