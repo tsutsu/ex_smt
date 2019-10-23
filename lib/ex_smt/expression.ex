@@ -102,6 +102,14 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
     [var_decls, assertions]
   end
 
+  def serialize(%ExSMT.Expression{op: :not, args: [arg]}) do
+    if ExSMT.Expression.predicate?(arg) do
+      ["(not ", ExSMT.Serializable.serialize(arg), ")"]
+    else
+      ["(= ", ExSMT.Serializable.serialize(arg), " 0)"]
+    end
+  end
+
   def serialize(%ExSMT.Expression{op: op, args: args}) do
     ser_args =
       Enum.map(args, &ExSMT.Serializable.serialize/1)
