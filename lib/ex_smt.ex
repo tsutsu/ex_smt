@@ -65,8 +65,12 @@ defmodule ExSMT do
 
   defp parse_goal_parts([], acc), do:
     Enum.reverse(acc)
-  defp parse_goal_parts([[op, var, value] | rest], acc) when is_atom(op), do:
-    parse_goal_parts(rest, [Expression.new(op, [var, value]) | acc])
+  defp parse_goal_parts([[op | _] = expr | rest], acc) when is_atom(op), do:
+    parse_goal_parts(rest, [parse_goal_expr(expr) | acc])
   defp parse_goal_parts([_ | _], acc), do:
     Enum.reverse(acc)
+
+  defp parse_goal_expr([op | args]) when is_atom(op), do:
+    Expression.new(op, Enum.map(args, &parse_goal_expr/1))
+  defp parse_goal_expr(t), do: t
 end
