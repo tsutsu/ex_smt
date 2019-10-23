@@ -121,15 +121,25 @@ end
 defimpl Inspect, for: ExSMT.Expression do
   import Inspect.Algebra
 
-  def inspect(%ExSMT.Expression{op: :true}, opts) do
-    color("⊤", :number, opts)
-  end
+  def inspect(%ExSMT.Expression{op: true}, opts), do:
+    color("⊤", :nil, opts)
+  def inspect(%ExSMT.Expression{op: false}, opts), do:
+    color("⊥", :nil, opts)
 
+  def inspect(%ExSMT.Expression{op: :conj, args: []}, opts), do:
+    color("⊤", :nil, opts)
   def inspect(%ExSMT.Expression{op: :conj, args: args}, opts) do
     pre = color("(", :tuple, opts)
     post = color(")", :tuple, opts)
     sep = color(" ∧", :operator, opts)
     nest(container_doc(pre, args, post, opts, &to_doc/2, separator: sep, break: :flex), 2)
+  end
+
+  def inspect(%ExSMT.Expression{op: :not, args: [arg]}, opts) do
+    concat([
+      color("!", :operator, opts),
+      to_doc(arg, opts)
+    ])
   end
 
   def inspect(%ExSMT.Expression{op: op, args: args}, opts) do
