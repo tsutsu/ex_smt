@@ -50,7 +50,7 @@ defimpl Inspect, for: ExSMT.Variable do
     concat([
       color("$#{name}", :environment_ref, opts),
       color("[", :tuple, opts),
-      Inspect.inspect(i, opts),
+      to_doc(i, opts),
       color("]", :tuple, opts)
     ])
   end
