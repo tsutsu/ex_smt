@@ -1,8 +1,12 @@
 defmodule ExSMT.Expression do
   defstruct [op: nil, args: [], var_decls: MapSet.new()]
 
-  def new(op, args), do:
-    %__MODULE__{op: op, args: args, var_decls: var_decls(args)}
+  def new(op, args) do
+    case simplify_trivial(op, args) do
+      {:ok, concrete_t} -> concrete_t
+      :error -> %__MODULE__{op: op, args: args, var_decls: var_decls(args)}
+    end
+  end
 
   def append(%__MODULE__{args: args, var_decls: vd} = f, new_arg), do:
     %__MODULE__{f | args: args ++ [new_arg], var_decls: var_decls_add(vd, new_arg)}
@@ -13,14 +17,78 @@ defmodule ExSMT.Expression do
     Enum.flat_map(l, &var_decls/1)
     |> Enum.into(MapSet.new())
   end
-  defp var_decls(_), do: []
+  defp var_decls(_), do: MapSet.new()
 
   defp var_decls_add(vd1, %__MODULE__{var_decls: vd2}), do:
     MapSet.union(vd1, vd2)
   defp var_decls_add(vd, %ExSMT.Variable{} = var), do:
     MapSet.put(vd, var)
   defp var_decls_add(vd, _), do:
-    vd
+    MapSet.new([vd])
+
+
+  defp simplify_trivial_append(op, old_concrete, new_arg) do
+    case concretize(new_arg) do
+      {:ok, concrete_new_arg} ->
+        simplify_trivial_op(op, [old_concrete, concrete_new_arg])
+      :error ->
+        :error
+    end
+  end
+
+  defp simplify_trivial(op, l) do
+    case concretize_args(l, []) do
+      {:ok, concrete_args} ->
+        simplify_trivial_op(op, concrete_args)
+      :error ->
+        :error
+    end
+  end
+
+  defp concretize_args([], acc), do: {:ok, Enum.reverse(acc)}
+  defp concretize_args([t | rest], acc) do
+    case concretize(t) do
+      {:ok, concrete_t} -> concretize_args(rest, [concrete_t | acc])
+      :error -> :error
+    end
+  end
+
+  def simplify_trivial_op(:=, [a, a]), do:
+    {:ok, true}
+  def simplify_trivial_op(:=, [a, b]) when a != b, do:
+    {:ok, false}
+  def simplify_trivial_op(:+, els), do:
+    {:ok, Enum.reduce(els, 0, &(&1 + &2))}
+  def simplify_trivial_op(:-, [a, b]), do:
+    {:ok, a - b}
+  def simplify_trivial_op(:*, els), do:
+    {:ok, Enum.reduce(els, 1, &(&1 * &2))}
+  def simplify_trivial_op(:/, [a, b]) when b != 0, do:
+    {:ok, div(a, b)}
+  def simplify_trivial_op(:%, [a, b]) when b != 0, do:
+    {:ok, rem(a, b)}
+  def simplify_trivial_op(:not, [0]), do:
+    {:ok, true}
+  def simplify_trivial_op(:not, [n]) when is_integer(n), do:
+    {:ok, false}
+  def simplify_trivial_op(:not, [true]), do:
+    {:ok, false}
+  def simplify_trivial_op(:not, [false]), do:
+    {:ok, true}
+  def simplify_trivial_op(_, _), do:
+    :error
+
+  @predicate_ops [:=, :>=, :<=, :>, :<, :not]
+  def predicate?(%__MODULE__{op: op}) when op in @predicate_ops, do: true
+  def predicate?(true), do: true
+  def predicate?(false), do: true
+  def predicate?(_), do: false
+
+  def concretize(true), do: {:ok, true}
+  def concretize(false), do: {:ok, false}
+  def concretize(n) when is_integer(n), do: {:ok, n}
+  def concretize(str) when is_binary(str), do: {:ok, str}
+  def concretize(_), do: :error
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.Expression do
