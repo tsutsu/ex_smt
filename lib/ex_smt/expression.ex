@@ -26,16 +26,6 @@ defmodule ExSMT.Expression do
   defp var_decls_add(vd, _), do:
     MapSet.new([vd])
 
-
-  defp simplify_trivial_append(op, old_concrete, new_arg) do
-    case concretize(new_arg) do
-      {:ok, concrete_new_arg} ->
-        simplify_trivial_op(op, [old_concrete, concrete_new_arg])
-      :error ->
-        :error
-    end
-  end
-
   defp simplify_trivial(op, l) do
     case concretize_args(l, []) do
       {:ok, concrete_args} ->
