@@ -9,16 +9,32 @@ defmodule ExSMT.Variable do
   defp mangle(type, name, i) do
     name_mangled = Macro.underscore(to_string(name))
     i_part = case i do
-      nil -> ""
-      t -> Macro.underscore(to_string(t))
+      nil -> "_"
+      n when is_integer(n) -> ["I:", to_string(n)]
+      t -> ["E:", Base.encode64(:erlang.term_to_binary(t))]
     end
-    "#{type}_#{name_mangled}#{i_part}"
+    "#{type}:#{name_mangled}:#{i_part}"
+  end
+
+  def from_mangled(bin) when is_binary(bin) and byte_size(bin) >= 5 do
+    [type, name | i_parts] = String.split(bin, ":", trim: true)
+
+    type = String.to_atom(type)
+    name = String.to_atom(name)
+
+    i = case i_parts do
+      ["_"] -> nil
+      ["I", int_str] -> String.to_integer(int_str, 10)
+      ["E", etf_b64] -> :erlang.binary_to_term(Base.decode64!(etf_b64))
+    end
+
+    %__MODULE__{type: type, name: name, i: i}
   end
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.Variable do
   def serialize(%ExSMT.Variable{key: key}) do
-    to_string(key)
+    ["|", to_string(key), "|"]
   end
 end
 

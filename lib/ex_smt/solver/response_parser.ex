@@ -6,15 +6,11 @@ defmodule ExSMT.Solver.ResponseParser do
     |> ascii_string([?0..?9], min: 1)
     |> tag(:number)
 
-  env_var =
-    ignore(string("env_"))
-    |> ascii_string([?a..?z, ?A..?Z, ?0..?9, ?-, ?_], min: 1)
-    |> tag(:env_var)
-
-  ssa_var =
-    ignore(string("ssa_"))
-    |> ascii_string([?a..?z, ?A..?Z, ?0..?9, ?-, ?_], min: 1)
-    |> tag(:ssa_var)
+  mangled_var =
+    ignore(ascii_char([?|]))
+    |> utf8_string([{:not, ?|}], min: 1)
+    |> ignore(ascii_char([?|]))
+    |> tag(:var)
 
   identifier =
     ascii_string([?a..?z, ?A..?Z, ?0..?9, ?-, ?_], min: 1)
@@ -68,8 +64,7 @@ defmodule ExSMT.Solver.ResponseParser do
   defparsec :sexpr_term, choice([
     number,
     string,
-    env_var,
-    ssa_var,
+    mangled_var,
     operator,
     identifier,
     atom,
@@ -104,10 +99,8 @@ defmodule ExSMT.Solver.ResponseParser do
     String.to_atom(str)
   defp normalize_types({:atom, [str]}), do:
     String.to_atom(str)
-  defp normalize_types({:env_var, [name]}), do:
-    ExSMT.Variable.new(:env, name)
-  defp normalize_types({:ssa_var, [name]}), do:
-    ExSMT.Variable.new(:ssa, name)
+  defp normalize_types({:var, [mangled]}), do:
+    ExSMT.Variable.from_mangled(mangled)
   defp normalize_types({:empty_list, []}), do:
     []
   defp normalize_types({:number, [digits_str]}), do:
