@@ -20,6 +20,17 @@ defmodule ExSMT.Solver.ResponseParser do
     ascii_string([?a..?z, ?A..?Z, ?0..?9, ?-, ?_], min: 1)
     |> tag(:identifier)
 
+  atom =
+    ignore(ascii_char([?:]))
+    |> ascii_string([?a..?z, ?A..?Z, ?0..?9, ?-, ?_], min: 1)
+    |> tag(:atom)
+
+  string =
+    ignore(ascii_char([?"]))
+    |> optional(utf8_string([{:not, ?"}], min: 1))
+    |> ignore(ascii_char([?"]))
+    |> tag(:string)
+
   operator =
     empty()
     |> choice([
@@ -42,47 +53,57 @@ defmodule ExSMT.Solver.ResponseParser do
     |> ignore(ascii_char([?)]))
     |> tag(:empty_list)
 
-  sexpr_element =
-    empty()
-    |> choice([
-      number,
-      env_var,
-      ssa_var,
-      operator,
-      identifier,
-      sort,
-      empty_list,
-      parsec(:sexpr)
-    ])
-
   flexible_space =
-    ignore(ascii_string([?\s], min: 1))
+    ignore(ascii_string([?\s, ?\r, ?\n, ?\t, ?\v], min: 1))
 
-  defparsecp :sexpr,
+  sexpr =
     ignore(ascii_char([?(]))
     |> optional(flexible_space)
-    |> concat(sexpr_element)
-    |> repeat(flexible_space |> concat(sexpr_element))
+    |> parsec(:sexpr_term)
+    |> repeat(flexible_space |> parsec(:sexpr_term))
     |> optional(flexible_space)
     |> ignore(ascii_char([?)]))
     |> tag(:list)
 
-  def model(model_lns) when is_list(model_lns) do
-    Enum.map(model_lns, &String.trim_trailing(&1, "\n"))
-    |> IO.iodata_to_binary()
-    |> model()
-  end
-  def model(model_lns) when is_binary(model_lns) do
-    {:ok, [result], "", %{}, _, _} = sexpr(model_lns)
+  defparsec :sexpr_term, choice([
+    number,
+    string,
+    env_var,
+    ssa_var,
+    operator,
+    identifier,
+    atom,
+    sort,
+    empty_list,
+    sexpr
+  ])
 
-    normalize_types(result)
-    |> normalize_model()
+  newline = ignore(ascii_char([?\n]))
+
+  defparsecp :response, repeat(
+    optional(flexible_space)
+    |> parsec(:sexpr_term)
+    |> tag(:response_term)
+    |> concat(newline)
+  )
+
+  def parse(lns) when is_list(lns), do:
+    parse(IO.iodata_to_binary(lns))
+  def parse(lns) when is_binary(lns) do
+    {:ok, results, "", %{}, _, _} = response(lns)
+    Enum.map(results, &normalize_types/1)
   end
 
+  defp normalize_types({:response_term, [t]}), do:
+    normalize_types(t)
   defp normalize_types({:list, l}), do:
     Enum.map(l, &normalize_types/1)
   defp normalize_types({:identifier, [id_str]}), do:
     String.to_atom(id_str)
+  defp normalize_types({:operator, [str]}), do:
+    String.to_atom(str)
+  defp normalize_types({:atom, [str]}), do:
+    String.to_atom(str)
   defp normalize_types({:env_var, [name]}), do:
     ExSMT.Variable.new(:env, name)
   defp normalize_types({:ssa_var, [name]}), do:
@@ -91,12 +112,6 @@ defmodule ExSMT.Solver.ResponseParser do
     []
   defp normalize_types({:number, [digits_str]}), do:
     String.to_integer(digits_str)
-
-  defp normalize_model([:model | parts0]) do
-    parts1 = Enum.map(parts0, &normalize_model_part/1)
-    ExSMT.Formula.new(:conj, parts1)
-  end
-
-  defp normalize_model_part([:"define-fun", var, [], _, value]), do:
-    ExSMT.Formula.new(:=, [var, value])
+  defp normalize_types({:string, [bin]}), do:
+    bin
 end

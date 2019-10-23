@@ -19,11 +19,52 @@ defmodule ExSMT do
     ser_f = ExSMT.Serializable.serialize(formula)
 
     case Solver.query([ser_f, "(check-sat)\n", "(get-model)\n"]) do
-      {:ok, ["sat\n" | model_lns]} ->
-        {:sat, Solver.ResponseParser.model(model_lns)}
+      [:sat, [:model | model_parts]] ->
+        model = parse_model_parts(model_parts)
+        {:sat, model}
 
-      {:ok, ["unsat\n" | _]} ->
-        :unsat
+      [:unsat, [:error, err]] ->
+        {:unsat, err}
     end
   end
+
+  defp parse_model_parts(l) when is_list(l), do:
+    Formula.new(:conj, Enum.map(l, &parse_model_part/1))
+
+  defp parse_model_part([:"define-fun", var, [], _sort, value]), do:
+    Formula.new(:=, [var, value])
+
+  @simplifier_command """
+    (apply
+      (then ctx-solver-simplify propagate-values
+        (par-then
+          (repeat
+            (or-else
+              split-clause
+              skip))
+          propagate-ineqs)))
+  """
+
+  def simplify(formula) do
+    ser_f = ExSMT.Serializable.serialize(formula)
+
+    case Solver.query([ser_f, @simplifier_command]) do
+      [[:goals, [:goal, false | _]]] ->
+        :unsat
+
+      [[:goals, [:goal | goal_parts]]] ->
+        goals = parse_goal_parts(goal_parts)
+        {:sat, goals}
+    end
+  end
+
+  defp parse_goal_parts(goals) when is_list(goals), do:
+    Formula.new(:conj, parse_goal_parts(goals, []))
+
+  defp parse_goal_parts([], acc), do:
+    Enum.reverse(acc)
+  defp parse_goal_parts([[op, var, value] | rest], acc) when is_atom(op), do:
+    parse_goal_parts(rest, [Formula.new(op, [var, value]) | acc])
+  defp parse_goal_parts([_ | _], acc), do:
+    Enum.reverse(acc)
 end

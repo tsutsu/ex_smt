@@ -35,7 +35,9 @@ defmodule ExSMT.Solver do
   def query(iodata) do
     case GenServer.whereis(__MODULE__) do
       nil -> {:error, :not_running}
-      pid when is_pid(pid) -> GenServer.call(__MODULE__, {:query, iodata}, 5000)
+      pid when is_pid(pid) ->
+        {:ok, response_lns} = GenServer.call(__MODULE__, {:query, iodata}, 5000)
+        ExSMT.Solver.ResponseParser.parse(response_lns)
     end
   end
 
@@ -112,7 +114,6 @@ defmodule ExSMT.Solver do
     {:reply, {:error, :not_running}, state}
   end
   def handle_call({:query, iodata}, from, %{mode: :running, process: proc, queries: q} = state) do
-
     script = [
       "(reset)\n",
       iodata, "\n",
@@ -188,6 +189,7 @@ defmodule ExSMT.Solver do
       IO.iodata_to_binary(iodata)
       |> StringIO.open(fn io ->
         IO.stream(io, :line)
+        |> Stream.filter(&not(match?("\n", &1)))
         |> Enum.to_list()
       end)
 
@@ -198,7 +200,8 @@ defmodule ExSMT.Solver do
     {waiter, acc}
   end
   defp handle_reply_lines(["__EOT__\n"], acc, waiter) do
-    GenServer.reply(waiter, {:ok, Enum.reverse(acc)})
+    response_lns = Enum.reverse(acc)
+    GenServer.reply(waiter, {:ok, response_lns})
     nil
   end
   defp handle_reply_lines([ln | lns], acc, waiter) do
