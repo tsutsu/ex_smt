@@ -1,4 +1,6 @@
 defmodule ExSMT do
+  require Logger
+
   alias ExSMT.Expression
   alias ExSMT.Variable
   alias ExSMT.Solver
@@ -18,6 +20,8 @@ defmodule ExSMT do
     Variable.new(:ssa, name, i)
 
   def solve(expr) do
+    # Logger.debug(["solving:\n", inspect(expr, IEx.inspect_opts())])
+
     ser_f =
       Expression.new(:toplevel, [expr])
       |> ExSMT.Serializable.serialize()
@@ -50,6 +54,8 @@ defmodule ExSMT do
   """
 
   def simplify(expr) do
+    # Logger.debug(["simplifying:\n", inspect(expr, IEx.inspect_opts())])
+
     ser_f =
       Expression.new(:toplevel, [expr])
       |> ExSMT.Serializable.serialize()
