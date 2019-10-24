@@ -18,7 +18,9 @@ defmodule ExSMT do
     Variable.new(:ssa, name, i)
 
   def solve(expr) do
-    ser_f = ExSMT.Serializable.serialize(expr)
+    ser_f =
+      Expression.new(:toplevel, [expr])
+      |> ExSMT.Serializable.serialize()
 
     case Solver.query([ser_f, "(check-sat)\n", "(get-model)\n"]) do
       [:sat, [:model | model_parts]] ->
@@ -31,7 +33,7 @@ defmodule ExSMT do
   end
 
   defp parse_model_parts(l) when is_list(l), do:
-    Expression.new(:conj, Enum.map(l, &parse_model_part/1))
+    Expression.new(:and, Enum.map(l, &parse_model_part/1))
 
   defp parse_model_part([:"define-fun", var, [], _sort, value]), do:
     Expression.new(:=, [var, value])
@@ -48,20 +50,32 @@ defmodule ExSMT do
   """
 
   def simplify(expr) do
-    ser_f = ExSMT.Serializable.serialize(expr)
+    ser_f =
+      Expression.new(:toplevel, [expr])
+      |> ExSMT.Serializable.serialize()
 
     case Solver.query([ser_f, @simplifier_command]) do
       [[:goals, [:goal, false | _]]] ->
         :unsat
 
-      [[:goals, [:goal | goal_parts]]] ->
-        goals = parse_goal_parts(goal_parts)
-        {:sat, goals}
+      [[:goals | sat_goals]] ->
+        sat_goal_exprs = Enum.map(sat_goals, fn [:goal | goal_parts] ->
+          parse_goal_parts(goal_parts)
+        end)
+
+        sat_goals_expr = case sat_goal_exprs do
+          [g_expr] ->
+            g_expr
+          args when length(args) > 1 ->
+            Expression.new(:or, args)
+        end
+
+        {:sat, sat_goals_expr}
     end
   end
 
   defp parse_goal_parts(goals) when is_list(goals), do:
-    Expression.new(:conj, parse_goal_parts(goals, []))
+    Expression.new(:and, parse_goal_parts(goals, []))
 
   defp parse_goal_parts([], acc), do:
     Enum.reverse(acc)

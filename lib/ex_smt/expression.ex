@@ -82,14 +82,12 @@ defmodule ExSMT.Expression do
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.Expression do
-  def serialize(%ExSMT.Expression{op: :conj, args: args, var_decls: var_decls}) do
+  def serialize(%ExSMT.Expression{op: :toplevel, args: [arg], var_decls: var_decls}) do
     var_decls = Enum.map(var_decls, fn var ->
       ["(declare-const ", ExSMT.Serializable.serialize(var), " Int)\n"]
     end)
-    assertions = Enum.map(args, fn f ->
-      ["(assert ", ExSMT.Serializable.serialize(f), ")\n"]
-    end)
-    [var_decls, assertions]
+    assertion = ["(assert ", ExSMT.Serializable.serialize(arg), ")\n"]
+    [var_decls, assertion]
   end
 
   def serialize(%ExSMT.Expression{op: :not, args: [arg]}) do
@@ -116,12 +114,21 @@ defimpl Inspect, for: ExSMT.Expression do
   def inspect(%ExSMT.Expression{op: false}, opts), do:
     color("⊥", :nil, opts)
 
-  def inspect(%ExSMT.Expression{op: :conj, args: []}, opts), do:
+  def inspect(%ExSMT.Expression{op: :and, args: []}, opts), do:
     color("⊤", :nil, opts)
-  def inspect(%ExSMT.Expression{op: :conj, args: args}, opts) do
+  def inspect(%ExSMT.Expression{op: :and, args: args}, opts) do
     pre = color("(", :tuple, opts)
     post = color(")", :tuple, opts)
     sep = color(" ∧", :operator, opts)
+    nest(container_doc(pre, args, post, opts, &to_doc/2, separator: sep, break: :flex), 2)
+  end
+
+  def inspect(%ExSMT.Expression{op: :or, args: []}, opts), do:
+    color("⊥", :nil, opts)
+  def inspect(%ExSMT.Expression{op: :or, args: args}, opts) do
+    pre = color("(", :tuple, opts)
+    post = color(")", :tuple, opts)
+    sep = color(" ∨", :operator, opts)
     nest(container_doc(pre, args, post, opts, &to_doc/2, separator: sep, break: :flex), 2)
   end
 

@@ -21,7 +21,7 @@ Docs can be found at [https://hexdocs.pm/ex_smt](https://hexdocs.pm/ex_smt).
 ```elixir
 iex> a = ExSMT.env_var(:a)
 iex> b = ExSMT.env_var(:b)
-iex> q = ExSMT.expr(:conj,
+iex> q = ExSMT.expr(:and,
 ...>   ExSMT.expr(:>, a, 5),
 ...>   ExSMT.expr(:<, a, 10),
 ...>   ExSMT.expr(:=, b, 7)
