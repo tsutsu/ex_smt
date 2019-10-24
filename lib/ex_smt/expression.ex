@@ -90,6 +90,13 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
     [var_decls, assertion]
   end
 
+  def serialize(%ExSMT.Expression{op: :and, args: []}), do:
+    ["true"]
+  def serialize(%ExSMT.Expression{op: :or, args: []}), do:
+    ["false"]
+  def serialize(%ExSMT.Expression{op: :not, args: []}), do:
+    ["false"]
+
   def serialize(%ExSMT.Expression{op: :not, args: [arg]}) do
     if ExSMT.Expression.predicate?(arg) do
       ["(not ", ExSMT.Serializable.serialize(arg), ")"]
