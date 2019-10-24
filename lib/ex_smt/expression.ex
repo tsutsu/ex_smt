@@ -68,11 +68,16 @@ defmodule ExSMT.Expression do
   def simplify_trivial_op(_, _), do:
     :error
 
-  @predicate_ops [:=, :>=, :<=, :>, :<, :not]
+  @predicate_ops [:=, :>=, :<=, :>, :<, :not, :or, :and]
   def predicate?(%__MODULE__{op: op}) when op in @predicate_ops, do: true
   def predicate?(true), do: true
   def predicate?(false), do: true
   def predicate?(_), do: false
+
+  def predify(%__MODULE__{op: op}) when op in @predicate_ops, do: op
+  def predify(true), do: true
+  def predify(false), do: false
+  def predify(expr), do: new(:not, [new(:=, [expr, 0])])
 
   def concretize(true), do: {:ok, true}
   def concretize(false), do: {:ok, false}
@@ -109,6 +114,15 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
 
   def serialize(%ExSMT.Expression{op: :exp, args: [2, power]}) when is_integer(power), do:
     [Bitwise.bsl(1, power)]
+
+  def serialize(%ExSMT.Expression{op: pred_op, args: args}) when pred_op in [:and, :or] do
+    ser_args =
+      Enum.map(args, &ExSMT.Expression.predify/1)
+      |> Enum.map(&ExSMT.Serializable.serialize/1)
+      |> Enum.intersperse(" ")
+
+    ["(", to_string(pred_op), " ", ser_args, ")"]
+  end
 
   def serialize(%ExSMT.Expression{op: op, args: args}) do
     ser_args =
