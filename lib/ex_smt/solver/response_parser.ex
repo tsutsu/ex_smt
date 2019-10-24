@@ -1,10 +1,17 @@
 defmodule ExSMT.Solver.ResponseParser do
   import NimbleParsec
 
-  number =
+  integer =
     optional(ascii_char([?-]))
     |> ascii_string([?0..?9], min: 1)
-    |> tag(:number)
+    |> tag(:integer)
+
+  decimal =
+    optional(ascii_char([?-]))
+    |> ascii_string([?0..?9], min: 1)
+    |> ascii_char([?.])
+    |> ascii_string([?0..?9], min: 1)
+    |> tag(:decimal)
 
   mangled_var =
     ignore(ascii_char([?|]))
@@ -62,7 +69,8 @@ defmodule ExSMT.Solver.ResponseParser do
     |> tag(:list)
 
   defparsec :sexpr_term, choice([
-    number,
+    decimal,
+    integer,
     string,
     mangled_var,
     operator,
@@ -103,8 +111,14 @@ defmodule ExSMT.Solver.ResponseParser do
     ExSMT.Variable.from_mangled(mangled)
   defp normalize_types({:empty_list, []}), do:
     []
-  defp normalize_types({:number, [digits_str]}), do:
+  defp normalize_types({:integer, [digits_str]}), do:
     String.to_integer(digits_str)
+  defp normalize_types({:decimal, digits_str}) do
+    {:ok, dec} =
+      IO.iodata_to_binary(digits_str)
+      |> Decimal.parse()
+    dec
+  end
   defp normalize_types({:string, [bin]}), do:
     bin
 end
