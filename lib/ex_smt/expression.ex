@@ -82,6 +82,8 @@ defmodule ExSMT.Expression do
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.Expression do
+  require Bitwise
+
   def serialize(%ExSMT.Expression{op: :toplevel, args: [arg], var_decls: var_decls}) do
     var_decls = Enum.map(var_decls, fn var ->
       ["(declare-const ", ExSMT.Serializable.serialize(var), " Int)\n"]
@@ -104,6 +106,9 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
       ["(= ", ExSMT.Serializable.serialize(arg), " 0)"]
     end
   end
+
+  def serialize(%ExSMT.Expression{op: :exp, args: [2, power]}) when is_integer(power), do:
+    [Bitwise.bsl(1, power)]
 
   def serialize(%ExSMT.Expression{op: op, args: args}) do
     ser_args =
