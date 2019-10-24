@@ -1,10 +1,15 @@
 defmodule ExSMT.Expression do
   defstruct [op: nil, args: [], var_decls: MapSet.new()]
 
-  def new(op, args) do
-    case simplify_trivial(op, args) do
-      {:ok, concrete_t} -> concrete_t
-      :error -> %__MODULE__{op: op, args: args, var_decls: var_decls(args)}
+  def new(op, args, opts \\ []) do
+    case Keyword.get(opts, :simplify, true) do
+      true ->
+        case simplify_trivial(op, args) do
+          {:ok, concrete_t} -> concrete_t
+          :error -> %__MODULE__{op: op, args: args, var_decls: var_decls(args)}
+        end
+      false ->
+        %__MODULE__{op: op, args: args, var_decls: var_decls(args)}
     end
   end
 
