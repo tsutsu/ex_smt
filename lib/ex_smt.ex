@@ -77,6 +77,11 @@ defmodule ExSMT do
         end
 
         {:sat, sat_goals_expr}
+
+      [[:error, err] | _goals] ->
+        Logger.error(err)
+        IO.puts(ser_f)
+        :unsat
     end
   end
 
