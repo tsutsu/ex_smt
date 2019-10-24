@@ -73,69 +73,72 @@ defmodule ExSMT.Expression do
   def simplify_trivial_op(_, _), do:
     :error
 
-  @predicate_ops [:=, :>=, :<=, :>, :<, :not, :or, :and]
-  def predicate?(%__MODULE__{op: op}) when op in @predicate_ops, do: true
-  def predicate?(true), do: true
-  def predicate?(false), do: true
-  def predicate?(_), do: false
-
-  def predify(%__MODULE__{op: op, args: args} = pred) when op in @predicate_ops, do:
-    %__MODULE__{pred | args: Enum.map(args, &predify/1)}
-  def predify(true), do: true
-  def predify(false), do: false
-  def predify(expr), do: new(:not, [new(:=, [expr, 0], simplify: false)], simplify: false)
-
   def concretize(true), do: {:ok, true}
   def concretize(false), do: {:ok, false}
   def concretize(n) when is_integer(n), do: {:ok, n}
   def concretize(str) when is_binary(str), do: {:ok, str}
   def concretize(_), do: :error
+
+  def serialize(%__MODULE__{op: :toplevel, args: [arg], var_decls: var_decls}) do
+    var_decls = Enum.map(var_decls, fn var ->
+      ["(declare-const ", ExSMT.Serializable.serialize_int(var), " Int)\n"]
+    end)
+    assertion = ["(assert ", ExSMT.Serializable.serialize_bool(arg), ")\n"]
+    [var_decls, assertion]
+  end
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.Expression do
   require Bitwise
 
-  def serialize(%ExSMT.Expression{op: :toplevel, args: [arg], var_decls: var_decls}) do
-    var_decls = Enum.map(var_decls, fn var ->
-      ["(declare-const ", ExSMT.Serializable.serialize(var), " Int)\n"]
-    end)
-    assertion = ["(assert ", ExSMT.Serializable.serialize(arg), ")\n"]
-    [var_decls, assertion]
-  end
+  @bool_to_bool [:and, :or, :not]
+  @int_to_bool [:=, :<, :>, :<=, :>=]
 
-  def serialize(%ExSMT.Expression{op: :and, args: []}), do:
-    ["true"]
-  def serialize(%ExSMT.Expression{op: :or, args: []}), do:
-    ["false"]
-  def serialize(%ExSMT.Expression{op: :not, args: []}), do:
-    ["false"]
-
-  def serialize(%ExSMT.Expression{op: :not, args: [%ExSMT.Expression{op: :not, args: [expr]}]}), do:
-    ExSMT.Serializable.serialize(expr)
-
-  def serialize(%ExSMT.Expression{op: :not, args: [arg]}) do
-    if ExSMT.Expression.predicate?(arg) do
-      ["(not ", ExSMT.Serializable.serialize(arg), ")"]
-    else
-      ["(= ", ExSMT.Serializable.serialize(arg), " 0)"]
-    end
-  end
-
-  def serialize(%ExSMT.Expression{op: :exp, args: [2, power]}) when is_integer(power), do:
-    [Bitwise.bsl(1, power)]
-
-  def serialize(%ExSMT.Expression{op: pred_op, args: args}) when pred_op in [:and, :or] do
+  def serialize_bool(%ExSMT.Expression{op: :and, args: []}), do: ["true"]
+  def serialize_bool(%ExSMT.Expression{op: :or, args: []}), do: ["false"]
+  def serialize_bool(%ExSMT.Expression{op: :not, args: []}), do: ["false"]
+  def serialize_bool(%ExSMT.Expression{op: :not, args: [%ExSMT.Expression{op: :not, args: [expr]}]}), do:
+    ExSMT.Serializable.serialize_bool(expr)
+  def serialize_bool(%ExSMT.Expression{op: op, args: args}) when op in @bool_to_bool do
     ser_args =
-      Enum.map(args, &ExSMT.Expression.predify/1)
-      |> Enum.map(&ExSMT.Serializable.serialize/1)
+      Enum.map(args, &ExSMT.Serializable.serialize_bool/1)
       |> Enum.intersperse(" ")
 
-    ["(", to_string(pred_op), " ", ser_args, ")"]
+    ["(", to_string(op), " ", ser_args, ")"]
+  end
+  def serialize_bool(%ExSMT.Expression{op: op, args: args}) when op in @int_to_bool do
+    ser_args =
+      Enum.map(args, &ExSMT.Serializable.serialize_int/1)
+      |> Enum.intersperse(" ")
+    ["(", to_string(op), " ", ser_args, ")"]
+  end
+  def serialize_bool(%ExSMT.Expression{op: op, args: args}) do
+    ser_args =
+      Enum.map(args, &ExSMT.Serializable.serialize_int/1)
+      |> Enum.intersperse(" ")
+    ["(not (= (", to_string(op), " ", ser_args, ") 0))"]
   end
 
-  def serialize(%ExSMT.Expression{op: op, args: args}) do
+  def serialize_int(%ExSMT.Expression{op: :and, args: []}), do: ["1"]
+  def serialize_int(%ExSMT.Expression{op: :or, args: []}), do: ["0"]
+  def serialize_int(%ExSMT.Expression{op: :not, args: []}), do: ["0"]
+  def serialize_int(%ExSMT.Expression{op: :exp, args: [2, power]}) when is_integer(power), do:
+    ExSMT.Serializable.serialize_int(Bitwise.bsl(1, power))
+  def serialize_int(%ExSMT.Expression{op: :mask, args: [expr, mask]}) when is_integer(mask), do:
+    ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:mod, [expr, mask]))
+  def serialize_int(%ExSMT.Expression{op: :not, args: [%ExSMT.Expression{op: :not, args: [expr]}]}), do:
+    ExSMT.Serializable.serialize_int(expr)
+  def serialize_int(%ExSMT.Expression{op: op} = expr) when op in @bool_to_bool, do:
+    ["(ite ", serialize_bool(expr), " 1 0)"]
+  def serialize_int(%ExSMT.Expression{op: op, args: args}) when op in @int_to_bool do
     ser_args =
-      Enum.map(args, &ExSMT.Serializable.serialize/1)
+      Enum.map(args, &ExSMT.Serializable.serialize_int/1)
+      |> Enum.intersperse(" ")
+    ["(ite (", to_string(op), " ", ser_args, ") 1 0)"]
+  end
+  def serialize_int(%ExSMT.Expression{op: op, args: args}) do
+    ser_args =
+      Enum.map(args, &ExSMT.Serializable.serialize_int/1)
       |> Enum.intersperse(" ")
     ["(", to_string(op), " ", ser_args, ")"]
   end

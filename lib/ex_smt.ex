@@ -24,7 +24,7 @@ defmodule ExSMT do
 
     ser_f =
       Expression.new(:toplevel, [expr])
-      |> ExSMT.Serializable.serialize()
+      |> ExSMT.Expression.serialize()
 
     case Solver.query([ser_f, "(check-sat)\n", "(get-model)\n"]) do
       [:sat, [:model | model_parts]] ->
@@ -58,7 +58,7 @@ defmodule ExSMT do
 
     ser_f =
       Expression.new(:toplevel, [expr])
-      |> ExSMT.Serializable.serialize()
+      |> ExSMT.Expression.serialize()
 
     case Solver.query([ser_f, @simplifier_command]) do
       [[:goals, [:goal, false | _]]] ->

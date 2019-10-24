@@ -33,8 +33,12 @@ defmodule ExSMT.Variable do
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.Variable do
-  def serialize(%ExSMT.Variable{key: key}) do
+  def serialize_int(%ExSMT.Variable{key: key}) do
     ["|", to_string(key), "|"]
+  end
+
+  def serialize_bool(%ExSMT.Variable{key: key}) do
+    ["(not (= |", to_string(key), "| 0))"]
   end
 end
 
