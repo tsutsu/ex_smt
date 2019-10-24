@@ -79,10 +79,11 @@ defmodule ExSMT.Expression do
   def predicate?(false), do: true
   def predicate?(_), do: false
 
-  def predify(%__MODULE__{op: op}) when op in @predicate_ops, do: op
+  def predify(%__MODULE__{op: op, args: args} = pred) when op in @predicate_ops, do:
+    %__MODULE__{pred | args: Enum.map(args, &predify/1)}
   def predify(true), do: true
   def predify(false), do: false
-  def predify(expr), do: new(:not, [new(:=, [expr, 0])])
+  def predify(expr), do: new(:not, [new(:=, [expr, 0], simplify: false)], simplify: false)
 
   def concretize(true), do: {:ok, true}
   def concretize(false), do: {:ok, false}
@@ -108,6 +109,9 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
     ["false"]
   def serialize(%ExSMT.Expression{op: :not, args: []}), do:
     ["false"]
+
+  def serialize(%ExSMT.Expression{op: :not, args: [%ExSMT.Expression{op: :not, args: [expr]}]}), do:
+    ExSMT.Serializable.serialize(expr)
 
   def serialize(%ExSMT.Expression{op: :not, args: [arg]}) do
     if ExSMT.Expression.predicate?(arg) do
