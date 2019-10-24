@@ -28,8 +28,11 @@ defmodule ExSMT.Expression do
     MapSet.union(vd1, vd2)
   defp var_decls_add(vd, %ExSMT.Variable{} = var), do:
     MapSet.put(vd, var)
+  defp var_decls_add(%MapSet{} = vd, _), do:
+    vd
   defp var_decls_add(vd, _), do:
-    MapSet.new([vd])
+    Enum.into(vd, MapSet.new())
+
 
   defp simplify_trivial(op, l) do
     case concretize_args(l, []) do
