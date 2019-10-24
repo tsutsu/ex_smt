@@ -15,6 +15,7 @@ defmodule ExSMT.MixProject do
   ]
 
   defp deps, do: [
+    {:decimal, "~> 1.8"},
     {:nimble_parsec, "~> 0.5.1"},
     {:porcelain, github: "walkr/porcelain"},
   ]
