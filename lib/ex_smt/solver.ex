@@ -119,6 +119,7 @@ defmodule ExSMT.Solver do
       iodata, "\n",
       "(echo \"__EOT__\")\n"
     ]
+    # Logger.debug(["writing:\n", script])
     Porcelain.Process.send_input(proc, script)
     {:noreply, %{state | queries: :queue.in(from, q)}}
   end
@@ -201,6 +202,7 @@ defmodule ExSMT.Solver do
   end
   defp handle_reply_lines(["__EOT__\n"], acc, waiter) do
     response_lns = Enum.reverse(acc)
+    # Logger.debug(["read back:\n", response_lns])
     GenServer.reply(waiter, {:ok, response_lns})
     nil
   end
