@@ -33,13 +33,17 @@ defmodule ExSMT.Expression do
   defp var_decls_add(vd, _), do:
     Enum.into(vd, MapSet.new())
 
-
   defp simplify_trivial(op, l) do
-    case concretize_args(l, []) do
-      {:ok, concrete_args} ->
-        simplify_trivial_op(op, concrete_args)
+    case simplify_by_identity(op, l) do
+      {:ok, simplified} ->
+        {:ok, simplified}
       :error ->
-        :error
+        case concretize_args(l, []) do
+          {:ok, concrete_args} ->
+            simplify_trivial_op(op, concrete_args)
+          :error ->
+            :error
+        end
     end
   end
 
@@ -51,30 +55,35 @@ defmodule ExSMT.Expression do
     end
   end
 
-  def simplify_trivial_op(:=, [a, a]), do:
-    {:ok, true}
-  def simplify_trivial_op(:=, [a, b]) when a != b, do:
-    {:ok, false}
   def simplify_trivial_op(:+, els), do:
     {:ok, Enum.reduce(els, 0, &(&1 + &2))}
   def simplify_trivial_op(:-, [a, b]), do:
     {:ok, a - b}
+  def simplify_trivial_op(:mask, [a, b]), do:
+    {:ok, Bitwise.band(a, b)}
   def simplify_trivial_op(:*, els), do:
     {:ok, Enum.reduce(els, 1, &(&1 * &2))}
-  def simplify_trivial_op(:/, [a, b]) when b != 0, do:
+  def simplify_trivial_op(:div, [a, b]) when b != 0, do:
     {:ok, div(a, b)}
-  def simplify_trivial_op(:%, [a, b]) when b != 0, do:
+  def simplify_trivial_op(:mod, [a, b]) when b != 0, do:
     {:ok, rem(a, b)}
-  def simplify_trivial_op(:not, [0]), do:
-    {:ok, true}
-  def simplify_trivial_op(:not, [n]) when is_integer(n), do:
-    {:ok, false}
-  def simplify_trivial_op(:not, [true]), do:
-    {:ok, false}
-  def simplify_trivial_op(:not, [false]), do:
-    {:ok, true}
   def simplify_trivial_op(_, _), do:
     :error
+
+  def simplify_by_identity(:=, [a, a]), do: {:ok, true}
+  def simplify_by_identity(:+, [0, a]), do: {:ok, a}
+  def simplify_by_identity(:+, [a, 0]), do: {:ok, a}
+  def simplify_by_identity(:*, [1, a]), do: {:ok, a}
+  def simplify_by_identity(:*, [a, 1]), do: {:ok, a}
+  def simplify_by_identity(:*, [0, _]), do: {:ok, 0}
+  def simplify_by_identity(:*, [_, 0]), do: {:ok, 0}
+  def simplify_by_identity(:"<<", [a, 0]), do: {:ok, a}
+  def simplify_by_identity(:">>", [a, 0]), do: {:ok, a}
+  def simplify_by_identity(:div, [0, _]), do: {:ok, 0}
+  def simplify_by_identity(:div, [a, 1]), do: {:ok, a}
+  def simplify_by_identity(:mod, [0, _]), do: {:ok, 0}
+  def simplify_by_identity(:mod, [_, 1]), do: {:ok, 0}
+  def simplify_by_identity(_op, _args), do: :error
 
   def concretize(true), do: {:ok, true}
   def concretize(false), do: {:ok, false}
