@@ -1,4 +1,6 @@
 defmodule ExSMT.Expression do
+  require Bitwise
+
   defstruct [op: nil, args: [], var_decls: MapSet.new()]
 
   def new(op, args, opts \\ []) do
@@ -136,6 +138,10 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
   def serialize_int(%ExSMT.Expression{op: :not, args: []}), do: ["0"]
   def serialize_int(%ExSMT.Expression{op: :exp, args: [2, power]}) when is_integer(power), do:
     ExSMT.Serializable.serialize_int(Bitwise.bsl(1, power))
+  def serialize_int(%ExSMT.Expression{op: :">>", args: [expr, width]}) when is_integer(width), do:
+    ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:div, expr, Bitwise.bsl(1, width)))
+  def serialize_int(%ExSMT.Expression{op: :"<<", args: [expr, width]}) when is_integer(width), do:
+    ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:*, expr, Bitwise.bsl(1, width)))
   def serialize_int(%ExSMT.Expression{op: :mask, args: [expr, mask]}) when is_integer(mask), do:
     ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:mod, [expr, mask]))
   def serialize_int(%ExSMT.Expression{op: :not, args: [%ExSMT.Expression{op: :not, args: [expr]}]}), do:
