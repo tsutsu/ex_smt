@@ -3,6 +3,7 @@ defmodule ExSMT do
 
   alias ExSMT.Expression
   alias ExSMT.Variable
+  alias ExSMT.TaggedConstant
   alias ExSMT.Solver
 
   def expr(op), do:
@@ -18,6 +19,9 @@ defmodule ExSMT do
     Variable.new(:env, name, i)
   def ssa_var(name, i \\ nil), do:
     Variable.new(:ssa, name, i)
+
+  def tag(value, with_tag), do:
+    TaggedConstant.new(with_tag, value)
 
   def solve(expr) do
     # Logger.debug(["solving:\n", inspect(expr, IEx.inspect_opts())])
