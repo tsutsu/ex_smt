@@ -4,6 +4,7 @@ defmodule ExSMT do
   alias ExSMT.Expression
   alias ExSMT.Variable
   alias ExSMT.TaggedConstant
+  alias ExSMT.BitVector
   alias ExSMT.Solver
 
   def expr(op), do:
@@ -26,6 +27,9 @@ defmodule ExSMT do
       :error -> TaggedConstant.new(with_tag, value)
     end
   end
+
+  def bv(value), do:
+    BitVector.new(value)
 
   def solve(expr) do
     # Logger.debug(["solving:\n", inspect(expr, IEx.inspect_opts())])
