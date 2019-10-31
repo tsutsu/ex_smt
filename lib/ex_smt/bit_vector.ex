@@ -17,7 +17,7 @@ defmodule ExSMT.BitVector do
     Stream.iterate(1, &(&1 * 256))
     |> Stream.with_index()
     |> Stream.drop(1)
-    |> Enum.take(256)
+    |> Enum.take(512)
   )
 
   for {max, sz} <- @max_for_size do
@@ -30,7 +30,7 @@ defmodule ExSMT.BitVector do
       %__MODULE__{value: rem(:binary.decode_unsigned(b), @max), size: @sz, repr: @repr}
   end
 
-  for sz <- 1..256 do
+  for sz <- 1..512 do
     @sz sz
     if rem(sz, 4) == 0 do
       defp repr(@sz), do: :hex
