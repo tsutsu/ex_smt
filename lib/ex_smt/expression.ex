@@ -142,8 +142,8 @@ defimpl ExSMT.Serializable, for: ExSMT.Expression do
     ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:div, expr, Bitwise.bsl(1, width)))
   def serialize_int(%ExSMT.Expression{op: :"<<", args: [expr, width]}) when is_integer(width), do:
     ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:*, expr, Bitwise.bsl(1, width)))
-  def serialize_int(%ExSMT.Expression{op: :mask, args: [expr, mask]}) when is_integer(mask), do:
-    ExSMT.Serializable.serialize_int(ExSMT.Expression.new(:mod, [expr, mask]))
+  def serialize_int(%ExSMT.Expression{op: :mask, args: [expr, _mask]}), do:
+    ExSMT.Serializable.serialize_int(expr)
   def serialize_int(%ExSMT.Expression{op: :not, args: [%ExSMT.Expression{op: :not, args: [expr]}]}), do:
     ExSMT.Serializable.serialize_int(expr)
   def serialize_int(%ExSMT.Expression{op: op} = expr) when op in @bool_to_bool, do:
