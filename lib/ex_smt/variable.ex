@@ -60,10 +60,13 @@ defimpl Inspect, for: ExSMT.Variable do
   end
 
   def inspect(%ExSMT.Variable{type: :ssa, name: pc, i: i}, opts) when is_integer(i) do
+    color("%#{pc}:#{i}", :identifier_ref, opts)
+  end
+  def inspect(%ExSMT.Variable{type: :ssa, name: pc, i: i}, opts) do
     concat([
-      color("%#{pc}", :identifier_ref, opts),
-      color(":", :tuple, opts),
-      to_doc(i, opts)
+      color("%#{pc}[", :identifier_ref, opts),
+      to_doc(i, opts),
+      color("]", :identifier_ref, opts)
     ])
   end
   def inspect(%ExSMT.Variable{name: pc, i: nil}, opts) do
