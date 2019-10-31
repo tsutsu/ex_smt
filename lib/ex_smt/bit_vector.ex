@@ -1,47 +1,82 @@
 defmodule ExSMT.BitVector do
-  defstruct [:value]
+  defstruct [:value, :size, :repr]
 
-  def new(n) when is_integer(n), do:
-    %__MODULE__{value: n}
-  def new(true), do:
-    %__MODULE__{value: 1}
-  def new(false), do:
-    %__MODULE__{value: 0}
-  def new(b) when is_binary(b), do:
-    %__MODULE__{value: :binary.decode_unsigned(b)}
+  def new(true), do: new(true, 1)
+  def new(false), do: new(false, 1)
+  def new(""), do: new(0, 8)
+  def new(0), do: new(0, 8)
+  def new(b) when is_bitstring(b), do: new(:binary.decode_unsigned(b), bit_size(b))
+  def new(n) when is_integer(n), do: new(n, bit_size(:binary.encode_unsigned(n)))
+
+  def new(true, sz) when is_integer(sz) and sz >= 1, do:
+    %__MODULE__{value: 1, size: sz, repr: repr(sz)}
+  def new(false, sz) when is_integer(sz) and sz >= 1, do:
+    %__MODULE__{value: 0, size: sz, repr: repr(sz)}
+
+  @max_for_size (
+    Stream.iterate(1, &(&1 * 256))
+    |> Stream.with_index()
+    |> Stream.drop(1)
+    |> Enum.take(256)
+  )
+
+  for {max, sz} <- @max_for_size do
+    @sz sz
+    @max max
+    @repr if rem(sz, 4) == 0, do: :hex, else: :binary
+    def new(n, @sz) when is_integer(n), do:
+      %__MODULE__{value: rem(n, @max), size: @sz, repr: @repr}
+    def new(b, @sz) when is_bitstring(b), do:
+      %__MODULE__{value: rem(:binary.decode_unsigned(b), @max), size: @sz, repr: @repr}
+  end
+
+  for sz <- 1..256 do
+    @sz sz
+    if rem(sz, 4) == 0 do
+      defp repr(@sz), do: :hex
+    else
+      defp repr(@sz), do: :binary
+    end
+  end
+
+  def digits(%__MODULE__{value: value, size: size, repr: :binary}) do
+    digits = Integer.to_string(value, 2)
+    pad_len = size - byte_size(digits)
+    [String.duplicate("0", pad_len), digits]
+  end
+
+  def digits(%__MODULE__{value: value, size: size, repr: :hex}) do
+    digits =
+      Integer.to_string(value, 16)
+      |> String.downcase()
+
+    pad_len = div(size, 4) - byte_size(digits)
+    [String.duplicate("0", pad_len), digits]
+  end
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.BitVector do
-  def serialize_bool(%ExSMT.BitVector{value: value}), do:
-    ["(not (= #b", pad_to_four(value), "))"]
+  def serialize_bool(%ExSMT.BitVector{repr: :binary} = bv), do:
+    ["(not (= #b", ExSMT.BitVector.digits(bv), "))"]
+  def serialize_bool(%ExSMT.BitVector{repr: :hex} = bv), do:
+    ["(not (= #x", ExSMT.BitVector.digits(bv), "))"]
 
-  def serialize_int(%ExSMT.BitVector{value: value}), do:
-    ["#b", pad_to_four(value)]
-
-  defp pad_to_four(value) do
-    v_str = Integer.to_string(value, 2)
-    pad_len = 4 - rem(byte_size(v_str), 4)
-    [List.duplicate(" ", pad_len), v_str]
-  end
+  def serialize_int(%ExSMT.BitVector{repr: :binary} = bv), do:
+    ["#b", ExSMT.BitVector.digits(bv)]
+  def serialize_int(%ExSMT.BitVector{repr: :hex} = bv), do:
+    ["#x", ExSMT.BitVector.digits(bv)]
 end
 
 defimpl Inspect, for: ExSMT.BitVector do
   import Inspect.Algebra
 
-  def inspect(%ExSMT.BitVector{value: value}, opts) do
-    digits = Integer.to_string(value, 2)
-
-    digits_part = case rle_encode(digits) do
-      {:ok, packed} ->
-        Enum.map(packed, fn
-          {:repeat, digit, times} -> [digit, "(", to_string(times), ")"]
-          {:raw, digits} -> digits
-        end)
-        |> Enum.intersperse(":")
-        |> IO.iodata_to_binary()
-      :error ->
-        digits
-    end
+  @repeating_bdigit_pat ~r/0+|1+/
+  def inspect(%ExSMT.BitVector{repr: :binary} = bv, opts) do
+    digits_part =
+      ExSMT.BitVector.digits(bv)
+      |> IO.iodata_to_binary()
+      |> ExSMT.RLE.encode(@repeating_bdigit_pat, 1)
+      |> format_digits_part()
 
     concat([
       color("#b", :number, opts),
@@ -49,19 +84,28 @@ defimpl Inspect, for: ExSMT.BitVector do
     ])
   end
 
-  def rle_encode(digits_str) do
-    digits_size = byte_size(digits_str)
-    {packed, raw_size} = rle_encode_part(Regex.scan(~r/1+|0+/, digits_str, capture: :first), [], 0)
-    case raw_size / digits_size do
-      n when n < 0.5 -> {:ok, packed}
-      _ -> :error
-    end
+  @repeating_hpair_pat ~r/([0-9a-f]{2})\1*/
+  def inspect(%ExSMT.BitVector{repr: :hex} = bv, opts) do
+    digits_part =
+      ExSMT.BitVector.digits(bv)
+      |> IO.iodata_to_binary()
+      |> ExSMT.RLE.encode(@repeating_hpair_pat, 2)
+      |> format_digits_part()
+
+    concat([
+      color("0x", :number, opts),
+      color(digits_part, :number, opts)
+    ])
   end
 
-  defp rle_encode_part([], acc, raw_len), do:
-    {:lists.reverse(acc), raw_len}
-  defp rle_encode_part([[short] | rest], acc, raw_len) when byte_size(short) < 4, do:
-    rle_encode_part(rest, [{:raw, short} | acc], raw_len + byte_size(short))
-  defp rle_encode_part([[<<digit::binary-size(1), _::binary>> = long] | rest], acc, raw_len), do:
-    rle_encode_part(rest, [{:repeat, digit, byte_size(long)} | acc], raw_len)
+  defp format_digits_part({:uncompressed, digits_str}), do:
+    digits_str
+  defp format_digits_part({:compressed, packed}) do
+    Enum.map(packed, fn
+      {:repeat, digit, times} -> [digit, "(", to_string(times), ")"]
+      {:raw, digits} -> digits
+    end)
+    |> Enum.intersperse(":")
+    |> IO.iodata_to_binary()
+  end
 end

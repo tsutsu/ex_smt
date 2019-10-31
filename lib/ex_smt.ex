@@ -28,8 +28,12 @@ defmodule ExSMT do
     end
   end
 
-  def bv(value), do:
-    BitVector.new(value)
+  def bv(value, opts \\ []) do
+    case Keyword.fetch(opts, :size) do
+      {:ok, size} -> BitVector.new(value, size)
+      :error -> BitVector.new(value)
+    end
+  end
 
   def solve(expr) do
     # Logger.debug(["solving:\n", inspect(expr, IEx.inspect_opts())])
