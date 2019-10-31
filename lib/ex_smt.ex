@@ -20,8 +20,12 @@ defmodule ExSMT do
   def ssa_var(name, i \\ nil), do:
     Variable.new(:ssa, name, i)
 
-  def tag(value, with_tag), do:
-    TaggedConstant.new(with_tag, value)
+  def tag(value, with_tag, opts \\ []) do
+    case Keyword.fetch(opts, :equiv) do
+      {:ok, expr} -> TaggedConstant.new(with_tag, value, expr)
+      :error -> TaggedConstant.new(with_tag, value)
+    end
+  end
 
   def solve(expr) do
     # Logger.debug(["solving:\n", inspect(expr, IEx.inspect_opts())])
