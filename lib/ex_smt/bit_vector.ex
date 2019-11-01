@@ -1,16 +1,19 @@
 defmodule ExSMT.BitVector do
+  require Bitwise
+
   defstruct [:value, :size, :repr]
 
   def new(true), do: new(true, 1)
   def new(false), do: new(false, 1)
-  def new(""), do: new(0, 8)
-  def new(0), do: new(0, 8)
-  def new(b) when is_bitstring(b), do: new(:binary.decode_unsigned(b), bit_size(b))
-  def new(n) when is_integer(n), do: new(n, bit_size(:binary.encode_unsigned(n)))
+  def new(b) when is_bitstring(b), do: new(bitstring_decode_unsigned(b), bit_size(b))
+  def new(n) when is_integer(n), do: new(n, integer_bit_size(n))
 
-  def new(true, sz) when is_integer(sz) and sz >= 1, do:
+  def new(_, sz) when not(is_integer(sz) and sz >= 1), do:
+    raise ArgumentError, "bitvector size must be a natural number"
+
+  def new(true, sz), do:
     %__MODULE__{value: 1, size: sz, repr: repr(sz)}
-  def new(false, sz) when is_integer(sz) and sz >= 1, do:
+  def new(false, sz), do:
     %__MODULE__{value: 0, size: sz, repr: repr(sz)}
 
   @max_for_size (
@@ -50,9 +53,39 @@ defmodule ExSMT.BitVector do
       Integer.to_string(value, 16)
       |> String.downcase()
 
-    pad_len = div(size, 4) - byte_size(digits)
+    pad_len = div(size + 3, 4) - byte_size(digits)
     [String.duplicate("0", pad_len), digits]
   end
+
+  def to_bitstring(%__MODULE__{value: value, size: size}) do
+    <<value::integer-size(size)>>
+  end
+  def to_binary(%__MODULE__{value: value, size: size}) do
+    rounded_sz = div(size + 7, 8) * 8
+    <<value::integer-size(rounded_sz)>>
+  end
+
+  defp bitstring_decode_unsigned(b) when is_binary(b), do:
+    :binary.decode_unsigned(b)
+  defp bitstring_decode_unsigned(b) when is_bitstring(b) do
+    sz = bit_size(b)
+
+    suffix_sz = rem(sz, 8)
+    prefix_sz = sz - suffix_sz
+
+    <<bytes_as_int::integer-size(prefix_sz), bits_as_int::integer-size(suffix_sz)>> = b
+
+    Bitwise.bsl(bytes_as_int, suffix_sz) + bits_as_int
+  end
+
+  defp integer_bit_size(n), do:
+    integer_bit_count(n, 0)
+
+  defp integer_bit_count(0, acc), do: acc
+  defp integer_bit_count(n, acc) when n >= 256, do:
+    integer_bit_count(div(n, 256), acc + 8)
+  defp integer_bit_count(n, acc), do:
+    integer_bit_count(div(n, 2), acc + 1)
 end
 
 defimpl ExSMT.Serializable, for: ExSMT.BitVector do
